@@ -52,7 +52,7 @@ const SB = supabase.createClient("https://haihzdlgnejevewmlyyy.supabase.co", "sb
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => "&#" + c.charCodeAt(0) + ";");
 // 画像は index.html と同じフォルダに置く(ファイル名の大文字小文字も一致させる)
-const STAGES = [{n:"たね",img:"tane.PNG",min:0},{n:"ちび",img:"tibi.PNG",min:3},{n:"こども",img:"kodomo.PNG",min:10},{n:"おとな",img:"otona.PNG",min:25}];
+const STAGES = [{n:"たね",img:"tane.png",min:0},{n:"ちび",img:"tibi.png",min:3},{n:"こども",img:"kodomo.png",min:10},{n:"おとな",img:"otona.png",min:25}];
 const ITEMS = {sofa:["#ffd98a","ソファ",30],lamp:["#fff0a8","ランプ",20],flower:["#ffc4a0","おはな",20],book:["#ffe6b3","ほんだな",25],clock:["#ffcf66","とけい",35],tv:["#ffb870","テレビ",60],bed:["#ffe08a","ベッド",80],piano:["#ffa94d","ピアノ",120]};
 const S = {user:null, hs:[], prof:null, view:"home", sel:null, adding:false, mode:"login", step:"email", email:""};
 
