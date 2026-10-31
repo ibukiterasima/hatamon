@@ -30,13 +30,16 @@ input:focus{outline:none;border-color:var(--main)}
 .bubble{text-align:center;font-weight:700;margin:6px 0;color:var(--main)}
 .gauge{height:18px;background:#fff3d1;border-radius:9px;overflow:hidden;border:1px solid var(--line)}
 .gauge i{display:block;height:100%;background:linear-gradient(90deg,var(--yellow),var(--main));transition:width .6s}
-.room{border-radius:16px;padding:10px;margin:10px 0;background:linear-gradient(#fff6d6 68%,#ffd98a 68%);min-height:150px;position:relative}
-.fl{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-.tile{padding:8px 10px;border-radius:10px;font-size:.85em;font-weight:700;color:#4a3a1f;cursor:pointer}
-.hh{position:absolute;right:8px;bottom:6px;display:flex;gap:2px}
-.hh img{width:52px;height:52px;object-fit:contain}
-.chip{display:inline-flex;gap:4px;align-items:center;margin:4px;padding:5px;border:2px solid var(--line);border-radius:12px}
-.chip button{padding:6px 8px;font-size:.8em}
+.row h2{margin:0}
+.yard{position:relative;aspect-ratio:5/4;background:url("庭.png") center/cover,#d7efb0;border-radius:16px;overflow:hidden;border:2px solid var(--line);margin:10px 0;user-select:none;-webkit-user-select:none}
+.yard.edit::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(to right,rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.6) 1px,transparent 1px);background-size:10% 12.5%}
+.pf{position:absolute;display:flex;align-items:center;justify-content:center;text-align:center;font-size:clamp(8px,2.2vw,12px);font-weight:700;line-height:1.15;color:#4a3a1f;border:2px solid rgba(255,255,255,.8);border-radius:8px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+.edit .pf,.tray .tile{touch-action:none;cursor:grab}
+.wk{position:absolute;width:14%;height:auto;pointer-events:none;transition:left 3.4s linear,top 3.4s linear}
+.menu{position:absolute;z-index:5;display:flex;gap:4px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:4px}
+.menu button{padding:6px 10px;font-size:.8em}
+.tile{display:inline-block;margin:4px;padding:8px 10px;border-radius:10px;font-size:.8em;font-weight:700;color:#4a3a1f;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.shop .row{padding:8px 0;border-bottom:1px solid var(--line)}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:2px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 nav button{flex:1;background:none;color:var(--sub);border-radius:0;padding:14px 4px;font-size:.85em}
 nav button.on{color:var(--main);box-shadow:inset 0 3px 0 var(--main)}
@@ -53,8 +56,9 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => "&#" + c.charCodeAt(0) + ";");
 // 画像は index.html と同じフォルダに置く(ファイル名の大文字小文字も一致させる)
 const STAGES = [{n:"たね",img:"tane.png",min:0},{n:"ちび",img:"tibi.png",min:3},{n:"こども",img:"kodomo.png",min:10},{n:"おとな",img:"otona.png",min:25}];
-const ITEMS = {sofa:["#ffd98a","ソファ",30],lamp:["#fff0a8","ランプ",20],flower:["#ffc4a0","おはな",20],book:["#ffe6b3","ほんだな",25],clock:["#ffcf66","とけい",35],tv:["#ffb870","テレビ",60],bed:["#ffe08a","ベッド",80],piano:["#ffa94d","ピアノ",120]};
-const S = {user:null, hs:[], prof:null, view:"home", sel:null, adding:false, mode:"login", step:"email", email:""};
+const ITEMS = {mushroom:["#ffd0b0","キノコのイス",5,1,1],cardtable:["#ffe6b3","カードゲーム台",5,2,1],acorntable:["#e8c08a","どんぐりテーブルセット",10,2,2],nutbox:["#f2c98a","木の実の収納箱",10,1,1],nutshelf:["#ffd98a","木の実のディスプレイ棚",10,2,1],hammock:["#cfe8a0","はっぱのハンモック",15,2,2],stones:["#e6e0d0","ぴょんぴょん飛び石",15,3,1],bench:["#bfe3a0","葉っぱの屋根付きベンチ",20,2,1],workbench:["#ffcf66","はたもんの作業台",20,2,1],swing:["#ffe08a","木の枝ブランコ",25,2,2],fountain:["#cdeeff","葉っぱの水飲み場",25,1,1]};
+const COLS = 10, ROWS = 8, CODES = {"PT-HQAYE":50};
+const S = {user:null, hs:[], prof:null, view:"home", sel:null, adding:false, mode:"login", email:"", gv:"main", edit:false, menu:null, walk:{}};
 
 function toast(t){const e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",3500);}
 const ymd = d => new Date(d).toLocaleDateString("sv");
@@ -76,19 +80,23 @@ async function load(){
   await Promise.all(S.hs.map(async h=>{
     const [w,l]=await Promise.all([
       SB.from("soil_readings").select("created_at").eq("device_id",h.device_id).eq("event","watered").gte("created_at",h.created_at).order("created_at").limit(1000),
-      SB.from("soil_readings").select("moisture_pct,needs_water,created_at").eq("device_id",h.device_id).order("created_at",{ascending:false}).limit(1)]);
+      SB.from("soil_readings").select("raw,moisture_pct,needs_water,created_at").eq("device_id",h.device_id).order("created_at",{ascending:false}).limit(1)]);
     Object.assign(h,calc(w.data||[]),{last:(l.data||[])[0]});
   }));
   if(S.sel)S.sel=S.hs.find(h=>h.id===S.sel.id)||null;
   let {data:p}=await SB.from("profiles").select("*").maybeSingle();
   if(!p)({data:p}=await SB.from("profiles").insert({}).select().single());
-  S.prof=p;
+  S.prof=p;S.prof.furniture=norm(p.furniture);
 }
+function norm(f){f=f||{};delete f.r1;delete f.r2;f.bought=(f.bought||[]).filter(id=>ITEMS[id]);f.placed=(f.placed||[]).filter(o=>ITEMS[o.id]);f.codes=f.codes||[];f.bonus=f.bonus||0;return f;}
 const F = () => S.prof.furniture;
 const total = () => S.hs.reduce((a,h)=>a+h.pts,0);
+const earned = () => total()+F().bonus;
 const spent = () => F().bought.reduce((a,id)=>a+ITEMS[id][2],0);
-const avail = () => total()-spent();
-const unplaced = () => {const a=[...F().bought];[...F().r1,...F().r2].forEach(x=>{const i=a.indexOf(x);if(i>-1)a.splice(i,1)});return a;};
+const avail = () => earned()-spent();
+const unplaced = () => {const a=[...F().bought];F().placed.forEach(o=>{const i=a.indexOf(o.id);if(i>-1)a.splice(i,1)});return a;};
+const dim = o => {const it=ITEMS[o.id];return (o.r||0)%2?[it[4],it[3]]:[it[3],it[4]];};
+const hit = (x,y,w,h,skip) => F().placed.some((o,i)=>{if(i===skip)return false;const [ow,oh]=dim(o);return x<o.x+ow&&o.x<x+w&&y<o.y+oh&&o.y<y+h;});
 async function saveF(){const {error}=await SB.from("profiles").update({furniture:F()}).eq("user_id",S.user.id);if(error)toast(error.message);render();}
 
 // ---------- ログイン / 新規登録(試作品: メールアドレスだけで即ログイン) ----------
@@ -133,7 +141,8 @@ function detailView(h){
   <div class="bubble">${!h.last?"まだデータがないよ":th?"のど乾いたー":"いいきもち"}</div>
   <h2 style="text-align:center">${esc(h.name)} <span class="sub">${st.n}</span></h2>
   ${gaugeHtml(h)}
-  <div class="row"><span>つち ${h.last?h.last.moisture_pct+"%":"-"}</span><span>${h.streak}日連続</span><span>${h.pts}pt</span></div></div>`;
+  <div class="row"><span>つち ${h.last?h.last.moisture_pct+"%":"-"}</span><span>${h.streak}日連続</span><span>${h.pts}pt</span></div>
+  <p class="sub" style="margin:10px 0 0">センサーの数値: <b>${h.last?h.last.raw:"-"}</b>${h.last?" / 更新 "+new Date(h.last.created_at).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):""}</p></div>`;
 }
 function homeView(){
   if(S.sel)return detailView(S.sel);
@@ -156,25 +165,83 @@ async function reg(){
 }
 
 // ---------- はたもんの庭 ----------
-const tile = (id,attr="") => `<span class="tile" style="background:${ITEMS[id][0]}" ${attr}>${ITEMS[id][1]}</span>`;
 function gardenView(){
-  const rooms=["r1","r2"].map((r,k)=>`<div class="room"><b>へや${k+1}</b><div class="fl">${F()[r].map((id,j)=>tile(id,`onclick="unplace('${r}',${j})"`)).join("")}</div>
-  <div class="hh">${S.hs.filter((_,j)=>j%2===k).map(h=>img(h,"")).join("")}</div></div>`).join("");
-  const own=unplaced().map(id=>`<span class="chip">${tile(id)}<button onclick="place('${id}',1)">へや1</button><button onclick="place('${id}',2)">へや2</button></span>`).join("");
-  const shop=Object.entries(ITEMS).map(([id,[c,n,p]])=>`<button class="ghost" style="margin:3px" ${avail()<p?"disabled":""} onclick="buy('${id}')">${n} ${p}pt</button>`).join("");
-  return `<h2>はたもんの庭</h2><div class="sub">使えるポイント: <b>${avail()}pt</b>(部屋の家具をタップで片付け)</div>${rooms}
-  <div class="card"><h3>もちもの</h3>${own||`<span class="sub">置いていない家具はありません</span>`}</div>
-  <div class="card"><h3>おみせ</h3>${shop}</div>`;
+  if(S.gv==="shop")return shopView();
+  const pl=F().placed.map((o,i)=>{const [c,n]=ITEMS[o.id],[w,h]=dim(o);
+    return `<div class="pf" ${S.edit?`onpointerdown="dragStart(event,'placed',${i})"`:""} style="left:${o.x*10}%;top:${o.y*12.5}%;width:${w*10}%;height:${h*12.5}%;background:${c}${(o.r||0)%2?";writing-mode:vertical-rl":""}">${n}</div>`}).join("");
+  const wk=S.hs.map(h=>{const p=S.walk[h.id]||(S.walk[h.id]={x:10+Math.random()*60,y:25+Math.random()*50});
+    return `<img class="wk" id="wk-${h.id}" src="${STAGES[stageOf(h)].img}" alt="" style="left:${p.x}%;top:${p.y}%">`}).join("");
+  let menu="";
+  if(S.edit&&S.menu!==null&&F().placed[S.menu]){const o=F().placed[S.menu],[w,h]=dim(o),below=o.y+h<ROWS-1;
+    menu=`<div class="menu" style="left:${Math.min(o.x*10,55)}%;top:${below?(o.y+h)*12.5:Math.max(0,(o.y-1)*12.5)}%"><button onclick="rot(${S.menu})">回転</button><button class="ghost" onclick="store(${S.menu})">しまう</button><button class="ghost" onclick="S.menu=null;render()">とじる</button></div>`;}
+  const tray=S.edit?`<div class="card tray"><h3>もちもの</h3><div class="sub">庭にドラッグして置きます。置いた家具をタップすると、回転・しまうが選べます。</div>
+    ${unplaced().map((id,j)=>`<span class="tile" style="background:${ITEMS[id][0]}" onpointerdown="dragStart(event,'tray',${j})">${ITEMS[id][1]}</span>`).join("")||`<div class="sub">置いていない家具はありません。ショップで買えます。</div>`}</div>`:"";
+  return `<div class="row"><h2>はたもんの庭</h2><div><button class="${S.edit?"":"ghost"}" onclick="S.edit=!S.edit;S.menu=null;render()">${S.edit?"完了":"編集"}</button> <button onclick="S.gv='shop';S.edit=false;S.menu=null;render()">ショップ</button></div></div>
+  <div id="yard" class="yard ${S.edit?"edit":""}">${pl}${wk}${menu}</div>${tray}`;
 }
-function buy(id){if(avail()<ITEMS[id][2])return;F().bought.push(id);saveF();}
-function place(id,room){const a=F()["r"+room];if(a.length>=8)return toast("へやがいっぱいです");a.push(id);saveF();}
-function unplace(r,j){F()[r].splice(j,1);saveF();}
+function shopView(){
+  const own=id=>F().bought.filter(x=>x===id).length;
+  const rows=Object.entries(ITEMS).map(([id,[c,n,p,w,h]])=>`<div class="row"><span><span class="tile" style="background:${c};margin:0 6px 0 0">${n}</span><span class="sub">${w}x${h}マス / もっている ${own(id)}</span></span>
+    <button ${avail()<p?"disabled":""} onclick="buy('${id}')">${p}pt</button></div>`).join("");
+  return `<div class="row"><h2>ショップ</h2><button class="ghost" onclick="S.gv='main';render()">庭にもどる</button></div>
+  <div class="card"><div class="sub">いまのポイント</div><div style="font-size:2em;font-weight:700;color:var(--main)">${avail()}pt</div></div>
+  <div class="card"><h3>ポイントコード</h3><div class="row"><input id="pc" placeholder="コードを入力" style="margin:0"><button onclick="redeem()">交換</button></div></div>
+  <div class="card shop"><h3>家具</h3>${rows}</div>`;
+}
+function buy(id){if(avail()<ITEMS[id][2])return toast("ポイントが足りません");F().bought.push(id);toast(ITEMS[id][1]+"を買いました");saveF();}
+function redeem(){
+  const c=$("#pc").value.trim().toUpperCase(), v=CODES[c];
+  if(!v)return toast("コードが正しくありません");
+  if(F().codes.includes(c))return toast("このコードはすでに使用済みです");
+  F().codes.push(c);F().bonus+=v;toast(v+"ポイント獲得しました!");saveF();
+}
+function rot(i){
+  const o=F().placed[i],ox=o.x,oy=o.y,or=o.r||0;
+  o.r=(or+1)%4;const [w,h]=dim(o);o.x=Math.min(o.x,COLS-w);o.y=Math.min(o.y,ROWS-h);
+  if(hit(o.x,o.y,w,h,i)){o.r=or;o.x=ox;o.y=oy;return toast("回転できません(ほかの家具と重なります)");}
+  saveF();
+}
+function store(i){F().placed.splice(i,1);S.menu=null;saveF();}
+// ドラッグで配置(もちもの→庭 / 庭の中で移動)。タップでミニメニュー
+function dragStart(e,kind,idx){
+  if(!S.edit)return; e.preventDefault();
+  const yard=$("#yard"), R=yard.getBoundingClientRect(), cw=R.width/COLS, ch=R.height/ROWS;
+  const id=kind==="tray"?unplaced()[idx]:F().placed[idx].id, r=kind==="tray"?0:(F().placed[idx].r||0);
+  const it=ITEMS[id], w=r%2?it[4]:it[3], h=r%2?it[3]:it[4];
+  const g=document.createElement("div");
+  g.className="pf";g.textContent=it[1];
+  g.style.cssText=`position:fixed;z-index:50;pointer-events:none;opacity:.85;width:${w*cw}px;height:${h*ch}px;background:${it[0]}`;
+  document.body.appendChild(g);
+  const sx=e.clientX, sy=e.clientY; let moved=false;
+  const put=ev=>{g.style.left=(ev.clientX-w*cw/2)+"px";g.style.top=(ev.clientY-h*ch/2)+"px";};
+  put(e);
+  const move=ev=>{if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>6)moved=true;put(ev);};
+  const up=ev=>{
+    removeEventListener("pointermove",move);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);g.remove();
+    if(kind==="placed"&&!moved){S.menu=S.menu===idx?null:idx;render();return;}
+    const Q=yard.getBoundingClientRect();
+    if(ev.clientX<Q.left||ev.clientX>Q.right||ev.clientY<Q.top||ev.clientY>Q.bottom){render();return;}
+    let x=Math.round((ev.clientX-Q.left)/cw-w/2), y=Math.round((ev.clientY-Q.top)/ch-h/2);
+    x=Math.max(0,Math.min(COLS-w,x));y=Math.max(0,Math.min(ROWS-h,y));
+    if(hit(x,y,w,h,kind==="placed"?idx:-1)){toast("ほかの家具と重なっています");render();return;}
+    if(kind==="tray")F().placed.push({id,x,y,r:0});else Object.assign(F().placed[idx],{x,y});
+    S.menu=null;saveF();
+  };
+  addEventListener("pointermove",move);addEventListener("pointerup",up);addEventListener("pointercancel",up);
+}
+// はたもんが庭を歩く
+setInterval(()=>{
+  if(S.view!=="garden"||S.gv!=="main")return;
+  S.hs.forEach(h=>{const el=$("#wk-"+h.id);if(!el)return;
+    const p=S.walk[h.id]||(S.walk[h.id]={x:30,y:50}),nx=3+Math.random()*78,ny=15+Math.random()*65;
+    el.style.transform=nx<p.x?"scaleX(-1)":"scaleX(1)";p.x=nx;p.y=ny;el.style.left=nx+"%";el.style.top=ny+"%";});
+},3600);
 
 // ---------- マイページ ----------
 function meView(){
   const list=S.hs.map(h=>`<div class="row" style="margin:6px 0"><span>${esc(h.name)} <span class="sub">(${esc(h.device_id)})</span></span><button class="ghost" onclick="del('${h.id}')">削除</button></div>`).join("");
   return `<h2>マイページ</h2><div class="card"><div class="sub">ログイン中</div><b>${esc(S.user.email)}</b>
-  <p>合計 ${total()}pt(使用 ${spent()}pt / 残り ${avail()}pt)</p></div>
+  <p>合計 ${earned()}pt(使用 ${spent()}pt / 残り ${avail()}pt)</p></div>
   <div class="card"><h3>登録しているはたもん</h3>${list||`<span class="sub">なし</span>`}</div>
   <button class="ghost" onclick="SB.auth.signOut()">ログアウト</button>`;
 }
